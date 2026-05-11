@@ -29,6 +29,7 @@ interface ProviderState {
   callbackSubmitting?: boolean;
   callbackStatus?: 'success' | 'error';
   callbackError?: string;
+  proxyUrl?: string;
 }
 
 interface VertexImportResult {
@@ -145,6 +146,9 @@ export function OAuthPage() {
     setStates((prev) => {
       const current = prev[provider] ?? {};
       const next: ProviderState = {};
+      if (current.proxyUrl !== undefined) {
+        next.proxyUrl = current.proxyUrl;
+      }
       if (provider === 'gemini-cli' && current.projectId !== undefined) {
         next.projectId = current.projectId;
       }
@@ -202,7 +206,9 @@ export function OAuthPage() {
 
   const startAuth = async (provider: OAuthProvider) => {
     clearProviderTimers(provider);
-    const geminiState = provider === 'gemini-cli' ? states[provider] : undefined;
+    const providerState = states[provider] || {};
+    const rawProxyUrl = (providerState.proxyUrl || '').trim();
+    const geminiState = provider === 'gemini-cli' ? providerState : undefined;
     const rawProjectId = provider === 'gemini-cli' ? (geminiState?.projectId || '').trim() : '';
     const projectId = rawProjectId
       ? rawProjectId.toUpperCase() === 'ALL'
@@ -224,10 +230,10 @@ export function OAuthPage() {
       callbackUrl: ''
     });
     try {
-      const res = await oauthApi.startAuth(
-        provider,
-        provider === 'gemini-cli' ? { projectId: projectId || undefined } : undefined
-      );
+      const res = await oauthApi.startAuth(provider, {
+        ...(provider === 'gemini-cli' ? { projectId: projectId || undefined } : {}),
+        proxyUrl: rawProxyUrl || undefined
+      });
       if (!res.state) {
         const message = t('auth_login.missing_state');
         updateProviderState(provider, {
@@ -395,6 +401,20 @@ export function OAuthPage() {
               >
                 <div className={styles.cardContent}>
                   <div className={styles.cardHint}>{t(provider.hintKey)}</div>
+                  <div className={styles.oauthProxyField}>
+                    <Input
+                      label={t('auth_login.oauth_proxy_label')}
+                      hint={t('auth_login.oauth_proxy_hint')}
+                      value={state.proxyUrl || ''}
+                      disabled={Boolean(state.polling)}
+                      onChange={(e) =>
+                        updateProviderState(provider.id, {
+                          proxyUrl: e.target.value
+                        })
+                      }
+                      placeholder={t('auth_login.oauth_proxy_placeholder')}
+                    />
+                  </div>
                   {provider.id === 'gemini-cli' && (
                     <div className={styles.geminiProjectField}>
                       <Input
